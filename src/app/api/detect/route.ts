@@ -23,13 +23,13 @@ export async function POST(request: NextRequest) {
 
     const base64 = image.toString("base64");
     const response = await openai.chat.completions.create({
-      model: "gpt-4.1-nano",
-      max_tokens: 256,
+      model: "gpt-5-nano",
+      max_completion_tokens: 256,
       messages: [
         {
           role: "user",
           content: [
-            { type: "text", text: "Is someone in danger in this video? Respond with either yes or no." },
+            { type: "text", text: "Are there exactly 2 people in this image? Only respond with yes or no." },
             {
               type: "image_url",
               image_url: { url: `data:image/jpeg;base64,${base64}` },

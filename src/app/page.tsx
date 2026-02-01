@@ -139,7 +139,6 @@ export default function Home() {
   useEffect(() => {
     const showTrip = appState === "TRIP_IN_PROGRESS" || appState === "DANGER_DETECTED";
     if (!showTrip) return;
-    runDetection();
     const id = setInterval(runDetection, 2000);
     return () => clearInterval(id);
   }, [appState, runDetection]);
@@ -488,7 +487,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* {appState === "DANGER_DETECTED" && (
+            {detectResult?.toLowerCase().includes("yes") && (
               <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -542,7 +541,7 @@ export default function Home() {
                   <p className="mt-2 text-sm text-red-600">Escort paused for your safety</p>
                 </motion.div>
               </motion.div>
-            )} */}
+            )}
           </motion.div>
         )}
       </AnimatePresence>
