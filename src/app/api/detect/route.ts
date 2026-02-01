@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Are there exactly 2 people in this image? Only respond with yes or no." },
+            { type: "text", text: "Are there 3 people in this image? Only respond with yes or no." },
             {
               type: "image_url",
               image_url: { url: `data:image/jpeg;base64,${base64}` },

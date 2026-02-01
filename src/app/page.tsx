@@ -120,6 +120,7 @@ export default function Home() {
   }, [appState, useStaticSource]);
 
   const runDetection = useCallback(async () => {
+    if (detectResult?.toLowerCase().includes("yes")) return;
     setDetectResult(null);
     setDetectLoading(true);
     try {
