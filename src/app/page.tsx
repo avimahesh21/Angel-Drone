@@ -1,33 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Navigation, 
-  Search, 
-  ShieldCheck, 
-  Clock, 
-  ArrowRight, 
-  Menu, 
+import {
+  Navigation,
+  Search,
+  ShieldCheck,
+  Clock,
+  ArrowRight,
+  Menu,
   X,
   Video,
-  AlertTriangle
+  AlertTriangle,
 } from "lucide-react";
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
+import Hls from "hls.js";
+import { useDroneFeedFrame } from "@/hooks/useDroneFeedFrame";
 
-// Dynamically import the Map component to avoid SSR and hydration issues
-const RealMap = dynamic(() => import('@/components/Map'), { 
+const RealMap = dynamic(() => import("@/components/Map"), {
   ssr: false,
-  loading: () => <div className="absolute inset-0 bg-zinc-100 dark:bg-zinc-900 animate-pulse" />
+  loading: () => <div className="absolute inset-0 bg-zinc-100 dark:bg-zinc-900 animate-pulse" />,
 });
 
 type AppState = "IDLE" | "SEARCHING" | "MATCHED" | "EN_ROUTE" | "ARRIVED" | "TRIP_IN_PROGRESS" | "DANGER_DETECTED";
+
+const streamUrl = "http://10.172.11.100:8080/live/dji.m3u8";
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("IDLE");
   const [destination, setDestination] = useState("");
   const [userPos, setUserPos] = useState<[number, number]>([37.7749, -122.4194]);
   const [dronePos, setDronePos] = useState<[number, number]>([37.78, -122.42]);
+  const [useStaticSource, setUseStaticSource] = useState(false);
+  const [detectLoading, setDetectLoading] = useState(false);
+  const [detectResult, setDetectResult] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { captureFrame, setReady } = useDroneFeedFrame(videoRef);
 
   const glassStyle = {
     background: 'rgba(255, 255, 255, 0.01)',
@@ -69,6 +77,65 @@ export default function Home() {
     }, 3000);
   };
 
+  useEffect(() => {
+    const showTrip = appState === "TRIP_IN_PROGRESS" || appState === "DANGER_DETECTED";
+    if (!showTrip) setUseStaticSource(false);
+  }, [appState]);
+
+  useEffect(() => {
+    const showTrip = appState === "TRIP_IN_PROGRESS" || appState === "DANGER_DETECTED";
+    if (!showTrip || !streamUrl || useStaticSource) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const isHlsUrl = streamUrl.includes(".m3u8");
+    if (!isHlsUrl) {
+      setUseStaticSource(true);
+      return;
+    }
+
+    let hls: Hls | null = null;
+    const nativeHls = video.canPlayType("application/vnd.apple.mpegurl");
+
+    if (Hls.isSupported()) {
+      hls = new Hls({ maxBufferLength: 30 });
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_: string, data: { fatal?: boolean }) => {
+        if (data.fatal) setUseStaticSource(true);
+      });
+    } else if (nativeHls) {
+      video.src = streamUrl;
+    } else {
+      setUseStaticSource(true);
+    }
+
+    return () => {
+      if (hls) {
+        hls.destroy();
+      } else if (nativeHls) {
+        video.src = "";
+      }
+    };
+  }, [appState, useStaticSource]);
+
+  const runDetection = async () => {
+    setDetectResult(null);
+    setDetectLoading(true);
+    try {
+      const blob = await captureFrame();
+      const form = new FormData();
+      form.append("image", blob, "frame.jpg");
+      const res = await fetch("/api/detect", { method: "POST", body: form });
+      const data = await res.json();
+      setDetectResult(data.result ?? data.message ?? JSON.stringify(data));
+    } catch (e) {
+      setDetectResult(e instanceof Error ? e.message : "Detection failed");
+    } finally {
+      setDetectLoading(false);
+    }
+  };
+
   const startTrip = () => {
     setAppState("TRIP_IN_PROGRESS");
     let currentUserLat = userPos[0];
@@ -93,7 +160,6 @@ export default function Home() {
         frameId = requestAnimationFrame(animate);
       } else {
         cancelAnimationFrame(frameId);
-        setAppState("DANGER_DETECTED");
       }
     };
     frameId = requestAnimationFrame(animate);
@@ -367,14 +433,18 @@ export default function Home() {
                   style={glassStyle}
                   className="flex-1 rounded-3xl overflow-hidden relative"
                 >
-                  <video 
+                  <video
+                    ref={videoRef}
                     className="w-full h-full object-cover"
                     autoPlay
-                    loop
+                    loop={!streamUrl}
                     muted
                     playsInline
+                    onLoadedMetadata={() => setReady(true)}
                   >
-                    <source src="/drone-feed.mp4" type="video/mp4" />
+                    {(!streamUrl || useStaticSource) && (
+                      <source src="/drone-feed.mp4" type="video/mp4" />
+                    )}
                   </video>
                   <div 
                     style={glassStyle}
@@ -385,6 +455,25 @@ export default function Home() {
                     <span>FPS: 60</span>
                     <span>●</span>
                     <span>1080p</span>
+                  </div>
+                  <div className="absolute top-4 left-4 right-4 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={runDetection}
+                      disabled={detectLoading}
+                      style={glassStyle}
+                      className="self-start rounded-xl px-4 py-2.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60 transition-all"
+                    >
+                      {detectLoading ? "Running detection…" : "Run detection"}
+                    </button>
+                    {detectResult && (
+                      <p 
+                        style={glassStyle}
+                        className="rounded-xl px-4 py-2.5 text-xs font-mono text-white/90 max-h-24 overflow-y-auto"
+                      >
+                        {detectResult}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
