@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Navigation,
@@ -119,7 +119,7 @@ export default function Home() {
     };
   }, [appState, useStaticSource]);
 
-  const runDetection = async () => {
+  const runDetection = useCallback(async () => {
     setDetectResult(null);
     setDetectLoading(true);
     try {
@@ -134,7 +134,15 @@ export default function Home() {
     } finally {
       setDetectLoading(false);
     }
-  };
+  }, [captureFrame]);
+
+  useEffect(() => {
+    const showTrip = appState === "TRIP_IN_PROGRESS" || appState === "DANGER_DETECTED";
+    if (!showTrip) return;
+    runDetection();
+    const id = setInterval(runDetection, 2000);
+    return () => clearInterval(id);
+  }, [appState, runDetection]);
 
   const startTrip = () => {
     setAppState("TRIP_IN_PROGRESS");
@@ -160,6 +168,7 @@ export default function Home() {
         frameId = requestAnimationFrame(animate);
       } else {
         cancelAnimationFrame(frameId);
+        setAppState("DANGER_DETECTED");
       }
     };
     frameId = requestAnimationFrame(animate);
@@ -479,7 +488,7 @@ export default function Home() {
               </div>
             </div>
 
-            {appState === "DANGER_DETECTED" && (
+            {/* {appState === "DANGER_DETECTED" && (
               <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -533,7 +542,7 @@ export default function Home() {
                   <p className="mt-2 text-sm text-red-600">Escort paused for your safety</p>
                 </motion.div>
               </motion.div>
-            )}
+            )} */}
           </motion.div>
         )}
       </AnimatePresence>

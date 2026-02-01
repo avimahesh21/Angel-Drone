@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { vl } from 'moondream'
+import OpenAI from "openai";
 
-const model = new vl({ apiKey: 'YOUR_API_KEY' });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,25 +14,37 @@ export async function POST(request: NextRequest) {
       image = Buffer.from(arrayBuffer);
     }
 
-    if (image == null){
-        return NextResponse.json(
-          { message: "Missing or invalid image" },
-          { status: 400 }
-        );
+    if (image == null) {
+      return NextResponse.json(
+        { message: "Missing or invalid image" },
+        { status: 400 }
+      );
     }
 
-    const result = await model.query({
-      image: image,
-      question: 'What is in this image?'
+    const base64 = image.toString("base64");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4.1-nano",
+      max_tokens: 256,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Is someone in danger in this video? Respond with either yes or no." },
+            {
+              type: "image_url",
+              image_url: { url: `data:image/jpeg;base64,${base64}` },
+            },
+          ],
+        },
+      ],
     });
-    console.log(result.answer);
 
-    return NextResponse.json({
-      result: "Moondream VLM integration: pass this image to your Moondream API and return the detection result here.",
-    });
-  } catch (e) {
+    const content = response.choices[0]?.message?.content ?? "";
+    return NextResponse.json({ result: content });
+  } catch (error){
+    console.error(error);
     return NextResponse.json(
-      { message: e instanceof Error ? e.message : "Detection failed" },
+      { message: "Detection failed" },
       { status: 500 }
     );
   }

@@ -2,6 +2,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Set `OPENAI_API_KEY` in `.env.local` for the drone feed detection API (`/api/detect`).
+
 First, run the development server:
 
 ```bash
